@@ -1,73 +1,551 @@
 <!DOCTYPE html>
-    activePlaylistName.toUpperCase() + ' RADIO';
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+
+<title>Synced Radio</title>
+
+<style>
+
+:root{
+  --bg:#0f1115;
+  --card:#171a21;
+  --border:#2a2f3a;
+  --text:#f5f5f5;
+  --sub:#9ea7b3;
+  --accent:#4a90ff;
+}
+
+*{
+  box-sizing:border-box;
+}
+
+html,body{
+  margin:0;
+  padding:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:Arial,sans-serif;
+  height:100%;
+  overflow:hidden;
+}
+
+body{
+  display:flex;
+  flex-direction:column;
+}
+
+/* PLAYER */
+
+.player{
+  padding:20px;
+  background:var(--card);
+  border-bottom:1px solid var(--border);
+}
+
+.top-row{
+  display:flex;
+  gap:12px;
+  flex-wrap:wrap;
+  align-items:center;
+}
+
+button{
+  background:var(--accent);
+  color:white;
+  border:none;
+  border-radius:10px;
+  padding:10px 14px;
+  font-size:14px;
+  cursor:pointer;
+}
+
+button:hover{
+  opacity:.9;
+}
+
+.volume-wrap{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+input[type=range]{
+  width:150px;
+}
+
+.now-playing{
+  margin-top:18px;
+}
+
+.now-playing h2{
+  margin:0 0 8px;
+  font-size:20px;
+}
+
+.now-playing p{
+  margin:0;
+  color:var(--sub);
+}
+
+/* PLAYLISTS */
+
+.playlists{
+  flex:1;
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:18px;
+  padding:18px;
+  overflow:hidden;
+}
+
+.playlist{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:16px;
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+}
+
+.playlist-header{
+  padding:16px;
+  border-bottom:1px solid var(--border);
+  font-weight:bold;
+  font-size:16px;
+}
+
+.song-list{
+  overflow-y:auto;
+  flex:1;
+}
+
+.song{
+  padding:12px 16px;
+  border-bottom:1px solid rgba(255,255,255,0.05);
+  color:var(--sub);
+  font-size:14px;
+  word-break:break-word;
+}
+
+.song.active{
+  background:rgba(74,144,255,0.15);
+  color:white;
+}
+
+.song:last-child{
+  border-bottom:none;
+}
+
+/* MOBILE */
+
+@media(max-width:900px){
+
+  html,body{
+    overflow:auto;
+  }
+
+  .playlists{
+    grid-template-columns:1fr;
+  }
+
+  .playlist{
+    height:260px;
+  }
 
 }
+
+</style>
+</head>
+<body>
+
+<audio id="audio"></audio>
+
+<div class="player">
+
+  <div class="top-row">
+
+    <button id="playBtn">▶ Play</button>
+
+    <button id="pauseBtn">⏸ Pause</button>
+
+    <button id="prevBtn">⏮ Prev</button>
+
+    <button id="nextBtn">⏭ Next</button>
+
+    <div class="volume-wrap">
+      🔊
+      <input type="range"
+             id="volume"
+             min="0"
+             max="1"
+             step="0.01"
+             value="0.3">
+    </div>
+
+  </div>
+
+  <div class="now-playing">
+    <h2 id="currentTitle">Waiting...</h2>
+    <p id="currentInfo">Radio Offline</p>
+  </div>
+
+</div>
+
+<div class="playlists">
+
+  <div class="playlist">
+    <div class="playlist-header">
+      🌅 Morning Playlist
+    </div>
+
+    <div class="song-list"
+         id="morningList"></div>
+  </div>
+
+  <div class="playlist">
+    <div class="playlist-header">
+      ☀️ Day Playlist
+    </div>
+
+    <div class="song-list"
+         id="dayList"></div>
+  </div>
+
+  <div class="playlist">
+    <div class="playlist-header">
+      🌙 Night Playlist
+    </div>
+
+    <div class="song-list"
+         id="nightList"></div>
+  </div>
+
+</div>
+
+<script>
+
+const audio =
+document.getElementById('audio');
+
+const playBtn =
+document.getElementById('playBtn');
+
+const pauseBtn =
+document.getElementById('pauseBtn');
+
+const prevBtn =
+document.getElementById('prevBtn');
+
+const nextBtn =
+document.getElementById('nextBtn');
+
+const volumeSlider =
+document.getElementById('volume');
+
+const currentTitle =
+document.getElementById('currentTitle');
+
+const currentInfo =
+document.getElementById('currentInfo');
+
+let playlists = {};
+
+let activePlaylist = [];
+
+let activePlaylistName = '';
+
+let currentIndex = 0;
+
+// LOAD JSON
+
+fetch('audio.json')
+
+.then(res => res.json())
+
+.then(data => {
+
+  playlists = data;
+
+  renderLists();
+
+  choosePlaylistByTime();
+
+});
+
+// RENDER LISTS
+
+function renderLists(){
+
+  renderPlaylist(
+    playlists.morning,
+    document.getElementById('morningList'),
+    'morning'
+  );
+
+  renderPlaylist(
+    playlists.day,
+    document.getElementById('dayList'),
+    'day'
+  );
+
+  renderPlaylist(
+    playlists.night,
+    document.getElementById('nightList'),
+    'night'
+  );
+
+}
+
+function renderPlaylist(
+  list,
+  container,
+  name
+){
+
+  container.innerHTML = '';
+
+  list.forEach((song,index)=>{
+
+    const div =
+    document.createElement('div');
+
+    div.className = 'song';
+
+    div.id =
+      name + '-' + index;
+
+    div.textContent =
+      cleanName(song.file);
+
+    div.onclick = ()=>{
+
+      activePlaylist =
+      playlists[name];
+
+      activePlaylistName =
+      name;
+
+      currentIndex = index;
+
+      playSong();
+
+    };
+
+    container.appendChild(div);
+
+  });
+
+}
+
+// CLEAN TITLE
+
+function cleanName(path){
+
+  return decodeURIComponent(
+    path.split('/').pop()
+  )
+  .replace(/\.[^/.]+$/, '');
+
+}
+
+// TIMEZONE PLAYLIST
+
+function choosePlaylistByTime(){
+
+  const hour =
+  new Date().getHours();
+
+  if(hour >= 1 && hour < 11){
+
+    activePlaylist =
+    playlists.morning;
+
+    activePlaylistName =
+    'morning';
+
+  }
+
+  else if(hour >= 11 && hour < 20){
+
+    activePlaylist =
+    playlists.day;
+
+    activePlaylistName =
+    'day';
+
+  }
+
+  else{
+
+    activePlaylist =
+    playlists.night;
+
+    activePlaylistName =
+    'night';
+
+  }
+
+}
+
+// PLAY SONG
+
+async function playSong(){
+
+  if(!activePlaylist.length) return;
+
+  const track =
+  activePlaylist[currentIndex];
+
+  audio.src =
+  encodeURI(track.file);
+
+  audio.volume =
+  volumeSlider.value;
+
+  updateUI();
+
+  try{
+
+    await audio.play();
+
+  }catch(err){
+
+    console.log(err);
+
+  }
+
+}
+
+// UPDATE UI
+
+function updateUI(){
+
+  document
+  .querySelectorAll('.song')
+  .forEach(el=>{
+
+    el.classList.remove('active');
+
+  });
+
+  const activeEl =
+  document.getElementById(
+
+    activePlaylistName
+    + '-'
+    + currentIndex
+
+  );
+
+  if(activeEl){
+
+    activeEl.classList.add('active');
+
+    activeEl.scrollIntoView({
+      block:'nearest'
+    });
+
+  }
+
+  const track =
+  activePlaylist[currentIndex];
+
+  currentTitle.textContent =
+  cleanName(track.file);
+
+  currentInfo.textContent =
+  activePlaylistName.toUpperCase()
+  + ' PLAYLIST';
+
+}
+
+// NEXT
 
 function nextSong(){
 
   currentIndex++;
 
-  if(currentIndex >= activePlaylist.length){
+  if(
+    currentIndex >=
+    activePlaylist.length
+  ){
+
     currentIndex = 0;
+
   }
 
-  playSong(currentIndex);
+  playSong();
 
 }
+
+// PREV
 
 function prevSong(){
 
   currentIndex--;
 
   if(currentIndex < 0){
-    currentIndex = activePlaylist.length - 1;
+
+    currentIndex =
+    activePlaylist.length - 1;
+
   }
 
-  playSong(currentIndex);
+  playSong();
 
 }
 
+// BUTTONS
+
 playBtn.onclick = ()=>{
 
-  if(!audio.src){
-
-    startRadio();
-
-  }else{
+  if(audio.src){
 
     audio.play();
+
+  }
+
+  else{
+
+    playSong();
 
   }
 
 };
 
 pauseBtn.onclick = ()=>{
+
   audio.pause();
+
 };
 
 nextBtn.onclick = ()=>{
+
   nextSong();
+
 };
 
 prevBtn.onclick = ()=>{
+
   prevSong();
+
 };
 
 volumeSlider.oninput = ()=>{
-  audio.volume = volumeSlider.value;
+
+  audio.volume =
+  volumeSlider.value;
+
 };
 
-audio.addEventListener('ended',()=>{
-  nextSong();
-});
+// AUTO NEXT
 
-function syncRadio(){
-
-  if(audio.src) return;
-
-  choosePlaylist();
-
-}
+audio.addEventListener(
+  'ended',
+  nextSong
+);
 
 </script>
 
